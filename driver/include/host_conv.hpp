@@ -51,6 +51,65 @@ void host_direct_convolution(const Tensor<TIn>& in_nchw,
     f_par(std::thread::hardware_concurrency());
 }
 
+template <class TIn,
+          class TWei,
+          class TOut,
+          class ConvStrides,
+          class ConvDilations,
+          class LowerPads,
+          class UpperPads>
+void host_direct_convolution_3d(const Tensor<TIn>& in_nchw,
+                             const Tensor<TWei>& wei_kcyx,
+                             Tensor<TOut>& out_nkhw,
+                             ConvStrides,
+                             ConvDilations,
+                             LowerPads,
+                             UpperPads)
+{
+    using namespace ck;
+
+    index_t d_pad_low = LowerPads{}.Get(Number<0>{});
+    index_t h_pad_low = LowerPads{}.Get(Number<1>{});
+    index_t w_pad_low = LowerPads{}.Get(Number<2>{});
+
+    auto f = [&](auto n, auto k,auto dout, auto ho, auto wo) {
+        double v = 0;
+        for(int c = 0; c < wei_kcyx.mDesc.GetLengths()[1]; ++c)
+        {
+            for(int z = 0; z < wei_kcyx.mDesc.GetLengths()[2]; ++z)
+            {
+                int zi = dout * ConvStrides{}[0] + z * ConvDilations{}[0] - d_pad_low;
+                for(int y = 0; y < wei_kcyx.mDesc.GetLengths()[3]; ++y)
+                {
+                    int hi = ho * ConvStrides{}[1] + y * ConvDilations{}[1] - h_pad_low;
+                    for(int x = 0; x < wei_kcyx.mDesc.GetLengths()[4]; ++x)
+                    {
+                        int wi = wo * ConvStrides{}[2] + x * ConvDilations{}[2] - w_pad_low;
+                        if(zi >=0 && zi < in_nchw.mDesc.GetLengths()[2] &&
+                           hi >= 0 && hi < in_nchw.mDesc.GetLengths()[3] && wi >= 0 &&
+                           wi < in_nchw.mDesc.GetLengths()[4])
+                        {
+                            v += double(in_nchw(n, c, zi, hi, wi)) * double(wei_kcyx(k, c, z, y, x));
+                        }
+                    }
+                }
+            }
+        }
+        out_nkhw(n, k, dout, ho, wo) = v;
+    };
+
+    auto f_par = make_ParallelTensorFunctor(f,
+                                            out_nkhw.mDesc.GetLengths()[0],
+                                            out_nkhw.mDesc.GetLengths()[1],
+                                            out_nkhw.mDesc.GetLengths()[2],
+                                            out_nkhw.mDesc.GetLengths()[3],
+                                            out_nkhw.mDesc.GetLengths()[4]);
+
+    f_par(std::thread::hardware_concurrency());
+}
+
+
+
 template <class TIn, class TWei, class TOut, class LowerPads, class UpperPads>
 void host_winograd_3x3_convolution(const Tensor<TIn>& in_nchw,
                                    const Tensor<TWei>& wei_kcyx,

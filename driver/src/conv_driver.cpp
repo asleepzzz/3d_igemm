@@ -24,7 +24,6 @@
 //#include "device_convolution_implicit_gemm_v4r3_nchw_kcyx_nkhw.hpp"
 #include "device_convolution_implicit_gemm_v4r4_nchw_kcyx_nkhw_deprecated.hpp"
 #include "device_convolution_implicit_gemm_v4r4_nchw_kcyx_nkhw.hpp"
-
 int main(int argc, char* argv[])
 {
     using namespace ck;
@@ -32,18 +31,21 @@ int main(int argc, char* argv[])
 #if 1
     // 1x1
     constexpr index_t N  = 64;
-    constexpr index_t C  = 64;
-    constexpr index_t HI = 56;
-    constexpr index_t WI = 56;
+    constexpr index_t C  = 128;
+    constexpr index_t DI = 56;
+    constexpr index_t HI = 16;
+    constexpr index_t WI = 16;
+    
     constexpr index_t K  = 256;
+    constexpr index_t Z  = 1;
     constexpr index_t Y  = 1;
     constexpr index_t X  = 1;
 
-    using ConvStrides   = Sequence<1, 1>;
-    using ConvDilations = Sequence<1, 1>;
+    using ConvStrides   = Sequence<1, 1, 1>;
+    using ConvDilations = Sequence<1, 1, 1>;
 
-    using LeftPads  = Sequence<0, 0>;
-    using RightPads = Sequence<0, 0>;
+    using LeftPads  = Sequence<0, 0, 0>;
+    using RightPads = Sequence<0, 0, 0>;
 #elif 0
     // 1x7
     constexpr index_t N  = 128;
@@ -344,14 +346,14 @@ int main(int argc, char* argv[])
     using RightPads = Sequence<3, 0>;
 #endif
 
-    auto in_nchw_desc  = make_ConstantTensorDescriptor_packed(Sequence<N, C, HI, WI>{});
-    auto wei_kcyx_desc = make_ConstantTensorDescriptor_packed(Sequence<K, C, Y, X>{});
-    auto out_nkhw_desc = get_convolution_output_default_4d_tensor_descriptor_deprecated(
-        in_nchw_desc, wei_kcyx_desc, ConvStrides{}, ConvDilations{}, LeftPads{}, RightPads{});
+    auto in_ncdhw_desc  = make_ConstantTensorDescriptor_packed(Sequence<N, C, DI, HI, WI>{});
+    auto wei_kczyx_desc = make_ConstantTensorDescriptor_packed(Sequence<K, C, Z, Y, X>{});
+    auto out_nkdhw_desc = get_convolution_output_default_5d_tensor_descriptor(
+          in_ncdhw_desc,wei_kczyx_desc,ConvStrides{}, ConvDilations{}, LeftPads{}, RightPads{});
 
-    ostream_ConstantTensorDescriptor(in_nchw_desc, std::cout << "in_nchw_desc: ");
-    ostream_ConstantTensorDescriptor(wei_kcyx_desc, std::cout << "wei_kcyx_desc: ");
-    ostream_ConstantTensorDescriptor(out_nkhw_desc, std::cout << "out_nkhw_desc: ");
+    ostream_ConstantTensorDescriptor(in_ncdhw_desc, std::cout << "in_ncdhw_desc: ");
+    ostream_ConstantTensorDescriptor(wei_kczyx_desc, std::cout << "wei_kczyx_desc: ");
+    ostream_ConstantTensorDescriptor(out_nkdhw_desc, std::cout << "out_nkdhw_desc: ");
     print_sequence("LeftPads", LeftPads{});
     print_sequence("RightPads", RightPads{});
     print_sequence("ConvStrides", ConvStrides{});
@@ -359,10 +361,10 @@ int main(int argc, char* argv[])
 
     using in_data_t  = float;
     using out_data_t = float;
-    Tensor<in_data_t> in_nchw(make_TensorDescriptor(in_nchw_desc));
-    Tensor<in_data_t> wei_kcyx(make_TensorDescriptor(wei_kcyx_desc));
-    Tensor<out_data_t> out_nkhw_host(make_TensorDescriptor(out_nkhw_desc));
-    Tensor<out_data_t> out_nkhw_device(make_TensorDescriptor(out_nkhw_desc));
+    Tensor<in_data_t> in_nchw(make_TensorDescriptor(in_ncdhw_desc));
+    Tensor<in_data_t> wei_kcyx(make_TensorDescriptor(wei_kczyx_desc));
+    Tensor<out_data_t> out_nkhw_host(make_TensorDescriptor(out_nkdhw_desc));
+    Tensor<out_data_t> out_nkhw_device(make_TensorDescriptor(out_nkdhw_desc));
 
     std::size_t num_thread = std::thread::hardware_concurrency();
 
@@ -434,7 +436,7 @@ int main(int argc, char* argv[])
                                                                     ConvStrides{},
                                                                     ConvDilations{},
                                                                     nrepeat);
-#elif 1
+#elif 0
     device_convolution_implicit_gemm_v4r1_nchw_kcyx_nkhw(in_nchw_desc,
                                                          in_nchw,
                                                          wei_kcyx_desc,
@@ -477,11 +479,11 @@ int main(int argc, char* argv[])
                                                                     ConvDilations{},
                                                                     nrepeat);
 #elif 1
-    device_convolution_implicit_gemm_v4r4_nchw_kcyx_nkhw(in_nchw_desc,
+    device_convolution_implicit_gemm_v4r4_nchw_kcyx_nkhw(in_ncdhw_desc,
                                                          in_nchw,
-                                                         wei_kcyx_desc,
+                                                         wei_kczyx_desc,
                                                          wei_kcyx,
-                                                         out_nkhw_desc,
+                                                         out_nkdhw_desc,
                                                          out_nkhw_device,
                                                          ConvStrides{},
                                                          ConvDilations{},
@@ -492,7 +494,7 @@ int main(int argc, char* argv[])
 
     if(do_verification)
     {
-#if 1
+#if 0
         if(Y == 3 && X == 3 && ConvStrides{}[0] == 1 && ConvStrides{}[1] == 1 &&
            ConvDilations{}[0] == 1 && ConvDilations{}[1] == 1)
         {
@@ -502,6 +504,22 @@ int main(int argc, char* argv[])
         else
 #endif
         {
+            host_direct_convolution_3d(in_nchw,
+                                    wei_kcyx,
+                                    out_nkhw_host,
+                                    ConvStrides{},
+                                    ConvDilations{},
+                                    LeftPads{},
+                                    RightPads{});
+
+for (int i =0;i<out_nkhw_device.mData.size();i++)
+{
+if (out_nkhw_device.mData[i]!=out_nkhw_host.mData[i])
+{
+printf("%d out_nkhw_device   %f host %f \n",i,out_nkhw_device.mData[i],out_nkhw_host.mData[i]);
+}
+}
+/*
             host_direct_convolution(in_nchw,
                                     wei_kcyx,
                                     out_nkhw_host,
@@ -509,8 +527,9 @@ int main(int argc, char* argv[])
                                     ConvDilations{},
                                     LeftPads{},
                                     RightPads{});
+*/
         }
-        check_error(out_nkhw_host, out_nkhw_device);
+//        check_error(out_nkhw_host, out_nkhw_device);
 
 #if 0
         LogRange(std::cout << "in_nchw : ", in_nchw.mData, ",") << std::endl;

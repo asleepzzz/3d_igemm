@@ -49,9 +49,11 @@ struct GridwiseConvolutionImplicitGemm_v4r4_nchw_kcyx_nkhw
                         const Float* const __restrict__ p_wei_global,
                         Float* const __restrict__ p_out_global) const
     {
+
         constexpr auto I1 = Number<1>{};
         constexpr auto I2 = Number<2>{};
         constexpr auto I3 = Number<3>{};
+        constexpr auto I4 = Number<4>{};
 
         constexpr auto in_n_c_hi_wi_global_desc  = InGlobalDesc{};
         constexpr auto wei_k_c_y_x_global_desc   = WeiGlobalDesc{};
@@ -59,21 +61,26 @@ struct GridwiseConvolutionImplicitGemm_v4r4_nchw_kcyx_nkhw
 
         constexpr index_t N  = in_n_c_hi_wi_global_desc.GetLengths()[0];
         constexpr index_t C  = in_n_c_hi_wi_global_desc.GetLengths()[1];
-        constexpr index_t Hi = in_n_c_hi_wi_global_desc.GetLengths()[2];
-        constexpr index_t Wi = in_n_c_hi_wi_global_desc.GetLengths()[3];
+        constexpr index_t Di = in_n_c_hi_wi_global_desc.GetLengths()[2];
+        constexpr index_t Hi = in_n_c_hi_wi_global_desc.GetLengths()[3];
+        constexpr index_t Wi = in_n_c_hi_wi_global_desc.GetLengths()[4];
 
         constexpr index_t K  = out_n_k_ho_wo_global_desc.GetLengths()[1];
-        constexpr index_t Ho = out_n_k_ho_wo_global_desc.GetLengths()[2];
-        constexpr index_t Wo = out_n_k_ho_wo_global_desc.GetLengths()[3];
+        constexpr index_t Do = out_n_k_ho_wo_global_desc.GetLengths()[2];
+        constexpr index_t Ho = out_n_k_ho_wo_global_desc.GetLengths()[3];
+        constexpr index_t Wo = out_n_k_ho_wo_global_desc.GetLengths()[4];
 
-        constexpr index_t Y = wei_k_c_y_x_global_desc.GetLengths()[2];
-        constexpr index_t X = wei_k_c_y_x_global_desc.GetLengths()[3];
+        constexpr index_t Z = wei_k_c_y_x_global_desc.GetLengths()[2];
+        constexpr index_t Y = wei_k_c_y_x_global_desc.GetLengths()[3];
+        constexpr index_t X = wei_k_c_y_x_global_desc.GetLengths()[4];
 
-        constexpr index_t ConvStrideH = ConvStrides{}[0];
-        constexpr index_t ConvStrideW = ConvStrides{}[1];
+        constexpr index_t ConvStrideD = ConvStrides{}[0];
+        constexpr index_t ConvStrideH = ConvStrides{}[1];
+        constexpr index_t ConvStrideW = ConvStrides{}[2];
 
-        constexpr index_t ConvDilationH = ConvDilations{}[0];
-        constexpr index_t ConvDilationW = ConvDilations{}[1];
+        constexpr index_t ConvDilationD = ConvDilations{}[0];
+        constexpr index_t ConvDilationH = ConvDilations{}[1];
+        constexpr index_t ConvDilationW = ConvDilations{}[2];
 
         // sanity-check for vectorized memory load
         static_assert((Wo == 1 || (ConvStrideW == 1 || GemmBBlockCopySrcDataPerRead_GemmN == 1)) &&
@@ -85,39 +92,41 @@ struct GridwiseConvolutionImplicitGemm_v4r4_nchw_kcyx_nkhw
 
         // weight tensor
         constexpr auto wei_e_k_global_desc = reorder_tensor_descriptor_given_upper2lower(
-            unfold_tensor_descriptor(wei_k_c_y_x_global_desc, I1, I3), Sequence<1, 0>{});
+            unfold_tensor_descriptor(wei_k_c_y_x_global_desc, I1, I4), Sequence<1, 0>{});
 
         // input tensor
         constexpr auto in_n_c_hip_wip_global_desc = transform_tensor_descriptor(
             in_n_c_hi_wi_global_desc,
             make_tuple(PassThrough<N>{},
                        PassThrough<C>{},
-                       Pad<Sequence<Hi, Wi>, InLeftPads, InRightPads>{}),
-            make_tuple(Sequence<0>{}, Sequence<1>{}, Sequence<2, 3>{}),
-            make_tuple(Sequence<0>{}, Sequence<1>{}, Sequence<2, 3>{}));
+                       Pad<Sequence<Di,Hi, Wi>, InLeftPads, InRightPads>{}),
+            make_tuple(Sequence<0>{}, Sequence<1>{}, Sequence<2, 3, 4>{}),
+            make_tuple(Sequence<0>{}, Sequence<1>{}, Sequence<2, 3, 4>{}));
 
-        constexpr index_t Hip = in_n_c_hip_wip_global_desc.GetLengths()[2];
-        constexpr index_t Wip = in_n_c_hip_wip_global_desc.GetLengths()[3];
+        constexpr index_t Dip = in_n_c_hip_wip_global_desc.GetLengths()[2];
+        constexpr index_t Hip = in_n_c_hip_wip_global_desc.GetLengths()[3];
+        constexpr index_t Wip = in_n_c_hip_wip_global_desc.GetLengths()[4];
 
         constexpr auto in_n_c_y_ho_x_wo_global_desc = transform_tensor_descriptor(
             in_n_c_hip_wip_global_desc,
             make_tuple(PassThrough<N>{},
                        PassThrough<C>{},
+                       Embed<Dip, Sequence<Z, Do>, Sequence<ConvDilationD, ConvStrideD, 0>>{},
                        Embed<Hip, Sequence<Y, Ho>, Sequence<ConvDilationH, ConvStrideH, 0>>{},
                        Embed<Wip, Sequence<X, Wo>, Sequence<ConvDilationW, ConvStrideW, 0>>{}),
-            make_tuple(Sequence<0>{}, Sequence<1>{}, Sequence<2>{}, Sequence<3>{}),
-            make_tuple(Sequence<0>{}, Sequence<1>{}, Sequence<2, 3>{}, Sequence<4, 5>{}));
+            make_tuple(Sequence<0>{}, Sequence<1>{}, Sequence<2>{}, Sequence<3>{},Sequence<4>{}),
+            make_tuple(Sequence<0>{}, Sequence<1>{}, Sequence<2, 3>{}, Sequence<4, 5>{},Sequence<6, 7>{}));
 
         constexpr auto in_e_b_global_desc = transform_tensor_descriptor(
             in_n_c_y_ho_x_wo_global_desc,
-            make_tuple(Merge<Sequence<C, Y, X>>{}, Merge<Sequence<N, Ho, Wo>>{}),
-            make_tuple(Sequence<1, 2, 4>{}, Sequence<0, 3, 5>{}),
+            make_tuple(Merge<Sequence<C, Z, Y, X>>{}, Merge<Sequence<N, Do, Ho, Wo>>{}),
+            make_tuple(Sequence<1, 2, 4, 6>{}, Sequence<0, 3, 5, 7>{}),
             make_tuple(Sequence<0>{}, Sequence<1>{}));
 
         // output tensor
         constexpr auto out_k_b_global_desc =
-            transform_tensor_descriptor(unfold_tensor_descriptor(out_n_k_ho_wo_global_desc, I2, I3),
-                                        make_tuple(PassThrough<K>{}, Merge<Sequence<N, Ho * Wo>>{}),
+            transform_tensor_descriptor(unfold_tensor_descriptor(out_n_k_ho_wo_global_desc, I2, I4),
+                                        make_tuple(PassThrough<K>{}, Merge<Sequence<N, Do *Ho * Wo>>{}),
                                         make_tuple(Sequence<1>{}, Sequence<0, 2>{}),
                                         make_tuple(Sequence<0>{}, Sequence<1>{}));
 
@@ -162,6 +171,7 @@ struct GridwiseConvolutionImplicitGemm_v4r4_nchw_kcyx_nkhw
                                                      GemmCThreadCopyDstDataPerWrite_GemmN1>{};
 
         gridwise_gemm.Run(p_wei_global, p_in_global, p_out_global);
+
     }
 };
 

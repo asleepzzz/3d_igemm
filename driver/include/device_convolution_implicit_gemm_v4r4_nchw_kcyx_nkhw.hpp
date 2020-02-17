@@ -27,10 +27,12 @@ void device_convolution_implicit_gemm_v4r4_nchw_kcyx_nkhw(InDesc,
 {
     using namespace ck;
 
+
     constexpr auto I0 = Number<0>{};
     constexpr auto I1 = Number<1>{};
     constexpr auto I2 = Number<2>{};
     constexpr auto I3 = Number<3>{};
+    constexpr auto I4 = Number<4>{};
 
     constexpr auto in_nchw_desc =
         make_native_tensor_descriptor(InDesc::GetLengths(), InDesc::GetStrides());
@@ -41,8 +43,9 @@ void device_convolution_implicit_gemm_v4r4_nchw_kcyx_nkhw(InDesc,
 
     constexpr index_t N  = out_nkhw_desc.GetLength(I0);
     constexpr index_t K  = out_nkhw_desc.GetLength(I1);
-    constexpr index_t Ho = out_nkhw_desc.GetLength(I2);
-    constexpr index_t Wo = out_nkhw_desc.GetLength(I3);
+    constexpr index_t Do = out_nkhw_desc.GetLength(I2);
+    constexpr index_t Ho = out_nkhw_desc.GetLength(I3);
+    constexpr index_t Wo = out_nkhw_desc.GetLength(I4);
 
     std::size_t data_sz = sizeof(T);
     DeviceMem in_nchw_device_buf(data_sz * in_nchw.mDesc.GetElementSpace());
@@ -179,6 +182,7 @@ void device_convolution_implicit_gemm_v4r4_nchw_kcyx_nkhw(InDesc,
     constexpr index_t GemmBBlockCopyDstDataPerWrite_GemmN = 4;
 
     constexpr index_t GemmCThreadCopyDstDataPerWrite_GemmN1 = 4;
+
 #elif 1
     // 1x1 filter, 14x14 image
     constexpr index_t BlockSize = 256;
@@ -213,7 +217,7 @@ void device_convolution_implicit_gemm_v4r4_nchw_kcyx_nkhw(InDesc,
 #endif
 
     constexpr index_t GemmM = K;
-    constexpr index_t GemmN = N * Ho * Wo;
+    constexpr index_t GemmN = N * Do * Ho * Wo;
 
     constexpr index_t GridSize = math::integer_divide_ceil(GemmM, GemmMPerBlock) *
                                  math::integer_divide_ceil(GemmN, GemmNPerBlock);
