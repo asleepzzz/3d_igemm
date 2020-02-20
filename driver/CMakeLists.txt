@@ -24,10 +24,6 @@ install(TARGETS host LIBRARY DESTINATION lib)
 #    set(CONV_BWD_DATA_SOURCE src/conv_bwd_data_driver.cu)
 #endif()
 
-set(KEVIN_SOURCE src/kevin.cpp)
-add_executable(kevin_driver ${KEVIN_SOURCE})
-target_link_libraries(kevin_driver PRIVATE host)
-
 add_executable(conv_driver ${CONV_SOURCE})
 #add_executable(col2im_driver ${COL2IM_SOURCE}) 
 #add_executable(conv_bwd_data_driver ${CONV_BWD_DATA_SOURCE}) 
