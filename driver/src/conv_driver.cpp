@@ -20,6 +20,7 @@
 //#include "device_convolution_implicit_gemm_v3_nchw_cyxk_nkhw.hpp"
 #include "device_convolution_implicit_gemm_v4r1_nchw_kcyx_nkhw_deprecated.hpp"
 #include "device_convolution_implicit_gemm_v4r1_nchw_kcyx_nkhw.hpp"
+#include "device_convolution_implicit_gemm_v4r1_nchw_kcyx_nkhw_3d.hpp"
 //#include "device_convolution_implicit_gemm_v4r2_nchw_kcyx_nkhw.hpp"
 //#include "device_convolution_implicit_gemm_v4r3_nchw_kcyx_nkhw.hpp"
 #include "device_convolution_implicit_gemm_v4r4_nchw_kcyx_nkhw_deprecated.hpp"
@@ -33,12 +34,12 @@ int main(int argc, char* argv[])
     constexpr index_t N  = 64;
     constexpr index_t C  = 128;
     constexpr index_t DI = 56;
-    constexpr index_t HI = 16;
+    constexpr index_t HI = 56;
     constexpr index_t WI = 16;
     
     constexpr index_t K  = 256;
-    constexpr index_t Z  = 1;
-    constexpr index_t Y  = 1;
+    constexpr index_t Z  = 56;
+    constexpr index_t Y  = 56;
     constexpr index_t X  = 1;
 
     using ConvStrides   = Sequence<1, 1, 1>;
@@ -448,6 +449,19 @@ int main(int argc, char* argv[])
                                                          LeftPads{},
                                                          RightPads{},
                                                          nrepeat);
+#elif 1
+    device_convolution_implicit_gemm_v4r1_nchw_kcyx_nkhw_3d(in_ncdhw_desc,
+                                                         in_nchw,
+                                                         wei_kczyx_desc,
+                                                         wei_kcyx,
+                                                         out_nkdhw_desc,
+                                                         out_nkhw_device,
+                                                         ConvStrides{},
+                                                         ConvDilations{},
+                                                         LeftPads{},
+                                                         RightPads{},
+                                                         nrepeat);
+
 #elif 0
     device_convolution_implicit_gemm_v4r2_nchw_kcyx_nkhw(in_nchw_desc,
                                                          in_nchw,
